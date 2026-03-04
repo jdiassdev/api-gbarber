@@ -3,13 +3,13 @@ version: '3.8'
 services:
   mysql:
     image: mysql:8.0
-    container_name: tattooz_mysql 
+    container_name: gbarber_mysql 
 
     restart: unless-stopped
 
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: tattoz_db
+      MYSQL_DATABASE: gbarber_db
       MYSQL_USER: dias
       MYSQL_PASSWORD: dias
 

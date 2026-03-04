@@ -24,8 +24,8 @@ return new class extends Migration
             $table->string('phone', 20)->nullable();
 
             $table->boolean('is_active')->default(true);
-            $table->enum('role', ['admin', 'client', 'barber'])->default('client');
-            
+            $table->string('role', 20)->default('client');
+
             $table->timestamps();
 
             $table->index('role');
