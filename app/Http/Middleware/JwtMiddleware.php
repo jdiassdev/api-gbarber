@@ -15,10 +15,6 @@ class JwtMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
-        Log::info('Entrou no JwtMiddleware', [
-            'headers' => $request->headers->all()
-        ]);
-
         try {
 
             $user = JWTAuth::parseToken()->authenticate();
@@ -30,7 +26,6 @@ class JwtMiddleware
                 ], Response::HTTP_UNAUTHORIZED);
             }
 
-            // adiciona usuário no request só como objeto simples
             $request->attributes->set('user_id', $user->id);
         } catch (TokenExpiredException $e) {
             return response()->json(['status' => 'error', 'message' => 'Token expirado'], Response::HTTP_UNAUTHORIZED);

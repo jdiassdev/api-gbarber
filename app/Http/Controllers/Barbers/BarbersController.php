@@ -10,14 +10,14 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class BarbersController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * listar barbeiros
      */
-    public function index(Request $request)
+    public function index()
     {
         $barbers = User::query()
             ->barber()
@@ -26,20 +26,20 @@ class BarbersController extends Controller
             ->get();
 
         return $this->success('Barbeiros disponiveis', Response::HTTP_OK, [
-            'barbers' => $barbers
+            'barbers' => $barbers,
         ]);
     }
 
-
+    /**
+     * verifica disponibilidade
+     */
     public function availability(Request $request, string $id)
     {
         $monthYear = $request->query('month');
 
         $timezone = 'America/Sao_Paulo';
 
-        $baseDate = $monthYear
-            ? Carbon::createFromFormat('Y-m', $monthYear, $timezone)
-            : Carbon::now($timezone);
+        $baseDate = $monthYear ? Carbon::createFromFormat('Y-m', $monthYear, $timezone) : Carbon::now($timezone);
 
         $today = Carbon::now($timezone);
 
@@ -54,7 +54,7 @@ class BarbersController extends Controller
 
         $end = $baseDate->copy()->endOfMonth()->endOfDay();
 
-        $bookings = DB::table('bookings')
+        $bookings = Booking::query()
             ->where('barber_id', $id)
             ->whereBetween('booking_date', [$start, $end])
             ->select('booking_date', DB::raw('GROUP_CONCAT(booking_time) as hours'))
@@ -64,16 +64,17 @@ class BarbersController extends Controller
 
         $booked = $bookings->map(fn($b) => [
             'booking_date' => $b->booking_date,
-            'booking_time' => explode(',', $b->hours)
+            'booking_time' => explode(',', $b->hours),
         ]);
 
         return $this->success('Disponobilidade', Response::HTTP_OK, [
-            'availability' => $booked
+            'availability' => $booked,
         ]);
     }
 
     /**
      * Store a newly created resource in storage.
+     * armazena um novo barbeiro
      */
     public function store(CreateBarberRequest $request)
     {
@@ -83,7 +84,12 @@ class BarbersController extends Controller
 
         $user = User::query()
             ->where('email', $data['email'])
-            ->firstOrFail();
+            ->select('id', 'name', 'email', 'phone', 'about', 'specialties', 'role')
+            ->first();
+
+        if (! $user) {
+            return $this->error('Usuário não encontrado', Response::HTTP_NOT_FOUND);
+        }
 
         if ($user->role === 'barber') {
             return $this->error('Usuário já é um barbeiro', Response::HTTP_BAD_REQUEST);
@@ -100,23 +106,29 @@ class BarbersController extends Controller
         });
 
         return $this->success('Barbeiro criado', Response::HTTP_CREATED, [
-            'barber' => $user->only('id', 'name', 'email', 'phone', 'about', 'specialties')
+            'barber' => $user->only('id', 'name', 'email', 'phone', 'about', 'specialties'),
         ]);
     }
 
     /**
      * Display the specified resource.
+     * ver um unico barbeiro
      */
     public function show(string $id)
     {
         $barber = User::query()
-            ->barber()
             ->active()
+            ->barber()
+            ->where('id', $id)
             ->select('id', 'name', 'email', 'phone', 'about', 'specialties', 'score')
-            ->findOrFail($id);
+            ->first();
+
+        if (! $barber) {
+            return $this->error('Barbeiro não encontrado', Response::HTTP_NOT_FOUND);
+        }
 
         return $this->success("Barbeiro {$barber->name}", Response::HTTP_OK, [
-            'barber' => $barber
+            'barber' => $barber,
         ]);
     }
 

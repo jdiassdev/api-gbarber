@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Bookings;
 
+use App\Enum\BookingStatusEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bookings\CreateBookingRequest;
 use App\Models\Booking;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class BookingController extends Controller
 {
@@ -23,27 +25,32 @@ class BookingController extends Controller
      */
     public function store(CreateBookingRequest $request)
     {
+
         try {
+            $request['user_id'] = $request->attributes->get('user_id');
+
             $data = $request->validated();
 
-            $userId = $request->attributes->get('user_id');
 
-            $exists = Booking::where('barber_id', $data['barber_id'])
+
+            $bkExist = Booking::query()
+                ->where('barber_id', $data['barber_id'])
+                ->where('service_id', $data['service_id'])
                 ->where('booking_date', $data['booking_date'])
                 ->where('booking_time', $data['booking_time'])
                 ->exists();
 
-            if ($exists) {
+            if ($bkExist) {
                 return $this->error('Horário já está ocupado', Response::HTTP_CONFLICT);
             }
 
             $booking = Booking::create([
-                'user_id' => $userId,
+                'user_id' => $data['user_id'],
                 'barber_id' => $data['barber_id'],
                 'service_id' => $data['service_id'],
                 'booking_date' => $data['booking_date'],
                 'booking_time' => $data['booking_time'],
-                'status' => 'pending',
+                'status' => BookingStatusEnum::PENDING->value,
             ]);
 
             return $this->success('Agendamento criado', Response::HTTP_CREATED, [
