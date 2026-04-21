@@ -51,6 +51,12 @@ class Booking extends Model
         return $query->where('barber_id', $barberId);
     }
 
+
+    public function scopeActive($query)
+    {
+        return $query->where('active', true);
+    }
+
     /**
      * Scope para reservas de um cliente específico
      */

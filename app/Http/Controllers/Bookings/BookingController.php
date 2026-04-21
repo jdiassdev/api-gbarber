@@ -31,13 +31,11 @@ class BookingController extends Controller
 
             $data = $request->validated();
 
-
-
             $bkExist = Booking::query()
                 ->where('barber_id', $data['barber_id'])
-                ->where('service_id', $data['service_id'])
                 ->where('booking_date', $data['booking_date'])
                 ->where('booking_time', $data['booking_time'])
+                ->whereNotIn('status', [BookingStatusEnum::CANCELED->value])
                 ->exists();
 
             if ($bkExist) {
@@ -66,7 +64,18 @@ class BookingController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $booking = Booking::active()
+            ->where('id', $id)
+            ->select('id', 'user_id', 'barber_id', 'service_id', 'booking_date', 'booking_time', 'status')
+            ->first();
+
+        if (!$booking) {
+            return $this->error('Agendamento não encontrado', Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->success('Agendamento achado', Response::HTTP_OK, [
+            'booking' => $booking
+        ]);
     }
 
     /**

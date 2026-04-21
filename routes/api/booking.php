@@ -4,6 +4,8 @@ use App\Http\Controllers\Bookings\BookingController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('bookings')->name('bookigns.')->group(function () {
+    Route::get('/{id}', [BookingController::class, 'show'])->name('show');
+
     Route::middleware('jwt')->group(function () {
         Route::post('/', [BookingController::class, 'store'])->name('store');
     });
