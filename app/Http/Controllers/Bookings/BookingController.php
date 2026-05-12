@@ -1,68 +1,42 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Bookings;
 
 use App\Enum\BookingStatusEnum;
+use App\Exceptions\BookingConflictException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bookings\CreateBookingRequest;
+use App\Http\Resources\BookingResource;
 use App\Models\Booking;
+use App\Models\User;
+use App\Services\BookingService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
 
 class BookingController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
+    public function __construct(private readonly BookingService $bookingService) {}
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(CreateBookingRequest $request)
+    public function store(CreateBookingRequest $request): JsonResponse
     {
-
         try {
-            $request['user_id'] = $request->attributes->get('user_id');
-
             $data = $request->validated();
+            $data['user_id'] = $request->attributes->get('user_id');
 
-            $bkExist = Booking::query()
-                ->where('barber_id', $data['barber_id'])
-                ->where('booking_date', $data['booking_date'])
-                ->where('booking_time', $data['booking_time'])
-                ->whereNotIn('status', [BookingStatusEnum::CANCELED->value])
-                ->exists();
-
-            if ($bkExist) {
-                return $this->error('Horário já está ocupado', Response::HTTP_CONFLICT);
-            }
-
-            $booking = Booking::create([
-                'user_id' => $data['user_id'],
-                'barber_id' => $data['barber_id'],
-                'service_id' => $data['service_id'],
-                'booking_date' => $data['booking_date'],
-                'booking_time' => $data['booking_time'],
-                'status' => BookingStatusEnum::PENDING->value,
-            ]);
+            $booking = $this->bookingService->create($data);
 
             return $this->success('Agendamento criado', Response::HTTP_CREATED, [
-                'booking' => $booking
+                'booking' => new BookingResource($booking),
             ]);
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        } catch (BookingConflictException $e) {
+            return $this->error($e->getMessage(), Response::HTTP_CONFLICT);
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function show(string $id): JsonResponse
     {
         $booking = Booking::active()
             ->where('id', $id)
@@ -73,24 +47,82 @@ class BookingController extends Controller
             return $this->error('Agendamento não encontrado', Response::HTTP_NOT_FOUND);
         }
 
-        return $this->success('Agendamento achado', Response::HTTP_OK, [
-            'booking' => $booking
+        return $this->success('Agendamento encontrado', Response::HTTP_OK, [
+            'booking' => new BookingResource($booking),
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function cancel(Request $request, string $id): JsonResponse
     {
-        //
+        $userId = $request->attributes->get('user_id');
+
+        $booking = Booking::where('id', $id)
+            ->where(fn($q) => $q->where('user_id', $userId)->orWhere('barber_id', $userId))
+            ->first();
+
+        if (!$booking) {
+            return $this->error('Agendamento não encontrado', Response::HTTP_NOT_FOUND);
+        }
+
+        $cancelable = [BookingStatusEnum::PENDING->value, BookingStatusEnum::CONFIRMED->value];
+
+        if (!in_array($booking->status, $cancelable, strict: true)) {
+            return $this->error('Agendamento não pode ser cancelado', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $booking->update(['status' => BookingStatusEnum::CANCELED->value]);
+
+        return $this->success('Agendamento cancelado', Response::HTTP_OK, [
+            'booking' => new BookingResource($booking),
+        ]);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function myBookings(Request $request): JsonResponse
     {
-        //
+        $userId = $request->attributes->get('user_id');
+
+        $user = User::where('id', $userId)
+            ->where('is_active', true)
+            ->first(['id', 'name', 'role']);
+
+        if (!$user) {
+            return $this->error('Usuário não encontrado', Response::HTTP_NOT_FOUND);
+        }
+
+        $perPage  = $request->integer('per_page', 15);
+        $bookings = match ($user->role) {
+            'barber' => $this->getBarberBookings($userId, $perPage),
+            'client' => $this->getClientBookings($userId, $perPage),
+            default  => collect(),
+        };
+
+        return $this->success('', Response::HTTP_OK, [
+            'user'     => ['id' => $user->id, 'name' => $user->name],
+            'bookings' => BookingResource::collection($bookings),
+        ]);
+    }
+
+    private function getBarberBookings(string $userId, int $perPage)
+    {
+        return Booking::where('barber_id', $userId)
+            ->with([
+                'user:id,name,phone,email',
+                'service:id,name,price,duration_minutes',
+            ])
+            ->orderByDesc('booking_date')
+            ->orderByDesc('booking_time')
+            ->paginate($perPage, ['id', 'user_id', 'service_id', 'booking_date', 'booking_time', 'status', 'created_at']);
+    }
+
+    private function getClientBookings(string $userId, int $perPage)
+    {
+        return Booking::where('user_id', $userId)
+            ->with([
+                'barber:id,name,score,specialties,about',
+                'service:id,name,price,duration_minutes',
+            ])
+            ->orderByDesc('booking_date')
+            ->orderByDesc('booking_time')
+            ->paginate($perPage, ['id', 'barber_id', 'service_id', 'booking_date', 'booking_time', 'status', 'created_at']);
     }
 }

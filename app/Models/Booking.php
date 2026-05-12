@@ -1,14 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Enum\BookingStatusEnum;
+use App\Enum\UserRoleEnum;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
 
 class Booking extends Model
 {
-    use HasUlids;
+    use HasFactory, HasUlids;
 
     public $incrementing = false;
     protected $keyType = 'string';
@@ -22,17 +28,15 @@ class Booking extends Model
         'status',
     ];
 
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-
     public function barber(): BelongsTo
     {
         return $this->belongsTo(User::class, 'barber_id')
-            ->where('role', 'barber');
+            ->where('role', UserRoleEnum::BARBER->value);
     }
 
     public function service(): BelongsTo
@@ -40,27 +44,22 @@ class Booking extends Model
         return $this->belongsTo(Service::class);
     }
 
-    //scopes
-    public function scopeUpcoming($query)
+    public function scopeUpcoming(Builder $query): Builder
     {
         return $query->whereDate('booking_date', '>=', now()->format('Y-m-d'));
     }
 
-    public function scopeForBarber($query, string $barberId)
+    public function scopeForBarber(Builder $query, string $barberId): Builder
     {
         return $query->where('barber_id', $barberId);
     }
 
-
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
-        return $query->where('active', true);
+        return $query->whereNotIn('status', [BookingStatusEnum::CANCELED->value]);
     }
 
-    /**
-     * Scope para reservas de um cliente específico
-     */
-    public function scopeForUser($query, string $userId)
+    public function scopeForUser(Builder $query, string $userId): Builder
     {
         return $query->where('user_id', $userId);
     }

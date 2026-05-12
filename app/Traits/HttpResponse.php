@@ -6,7 +6,6 @@ use Illuminate\Contracts\Support\MessageBag;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Response;
 
 trait HttpResponse
 {
@@ -24,7 +23,7 @@ trait HttpResponse
         return response()->json([
             'message' => $message,
             'status' => $status,
-            'erros' => $errors,
+            'errors' => $errors,
             'data' => $data
         ], $status, [], JSON_UNESCAPED_SLASHES);
     }
